@@ -4,8 +4,7 @@ import time
 from pathlib import Path
 import wave
 import pyaudio
-from pydub import AudioSegment
-from audiorecorder import audiorecorder
+import subprocess
 import numpy as np
 from scipy.io.wavfile import write
 from langchain.prompts import (
@@ -19,24 +18,27 @@ from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
 import constants as ct
 
+
 def record_audio(audio_input_file_path):
     """
-    音声入力を受け取って音声ファイルを作成
+    🎤 Streamlit標準のst.audio_inputを使用して音声を録音・保存する関数
+    Args:
+        audio_input_file_path: 保存先のファイルパス
     """
 
-    audio = audiorecorder(
-        start_prompt="発話開始",
-        pause_prompt="やり直す",
-        stop_prompt="発話終了",
-        start_style={"color":"white", "background-color":"black"},
-        pause_style={"color":"gray", "background-color":"white"},
-        stop_style={"color":"white", "background-color":"black"}
-    )
+    st.info("下のマイクボタンを押して話してください。録音後、自動で保存されます。")
 
-    if len(audio) > 0:
-        audio.export(audio_input_file_path, format="wav")
+    # Streamlit標準の音声入力コンポーネント
+    audio_bytes = st.audio_input("🎙️ 音声を録音してください")
+
+    # 録音された場合のみ保存
+    if audio_bytes:
+        with open(audio_input_file_path, "wb") as f:
+            f.write(audio_bytes)
+        st.success("✅ 音声が保存されました！")
     else:
         st.stop()
+
 
 def transcribe_audio(audio_input_file_path):
     """
@@ -51,29 +53,36 @@ def transcribe_audio(audio_input_file_path):
             file=audio_input_file,
             language="en"
         )
-    
+
     # 音声入力ファイルを削除
     os.remove(audio_input_file_path)
 
     return transcript
 
+
 def save_to_wav(llm_response_audio, audio_output_file_path):
     """
-    一旦mp3形式で音声ファイル作成後、wav形式に変換
+    pydubを使わずにffmpegコマンドでmp3→wav変換する関数
     Args:
         llm_response_audio: LLMからの回答の音声データ
         audio_output_file_path: 出力先のファイルパス
     """
 
+    # 一時的にmp3ファイルを作成
     temp_audio_output_filename = f"{ct.AUDIO_OUTPUT_DIR}/temp_audio_output_{int(time.time())}.mp3"
     with open(temp_audio_output_filename, "wb") as temp_audio_output_file:
         temp_audio_output_file.write(llm_response_audio)
-    
-    audio_mp3 = AudioSegment.from_file(temp_audio_output_filename, format="mp3")
-    audio_mp3.export(audio_output_file_path, format="wav")
 
-    # 音声出力用に一時的に作ったmp3ファイルを削除
+    # ffmpegでmp3→wav変換
+    subprocess.run(
+        ["ffmpeg", "-y", "-i", temp_audio_output_filename, audio_output_file_path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+
+    # 一時ファイル削除
     os.remove(temp_audio_output_filename)
+
 
 def play_wav(audio_output_file_path, speed=1.0):
     """
@@ -83,28 +92,15 @@ def play_wav(audio_output_file_path, speed=1.0):
         speed: 再生速度（1.0が通常速度、0.5で半分の速さ、2.0で倍速など）
     """
 
-    # 音声ファイルの読み込み
-    audio = AudioSegment.from_wav(audio_output_file_path)
-    
-    # 速度を変更
-    if speed != 1.0:
-        # frame_rateを変更することで速度を調整
-        modified_audio = audio._spawn(
-            audio.raw_data, 
-            overrides={"frame_rate": int(audio.frame_rate * speed)}
-        )
-        # 元のframe_rateに戻すことで正常再生させる（ピッチを保持したまま速度だけ変更）
-        modified_audio = modified_audio.set_frame_rate(audio.frame_rate)
-
-        modified_audio.export(audio_output_file_path, format="wav")
-
-    # PyAudioで再生
+    # waveモジュールでファイルを開いて再生
     with wave.open(audio_output_file_path, 'rb') as play_target_file:
         p = pyaudio.PyAudio()
+
+        # 再生ストリームを開く
         stream = p.open(
             format=p.get_format_from_width(play_target_file.getsampwidth()),
             channels=play_target_file.getnchannels(),
-            rate=play_target_file.getframerate(),
+            rate=int(play_target_file.getframerate() * speed),
             output=True
         )
 
@@ -116,9 +112,10 @@ def play_wav(audio_output_file_path, speed=1.0):
         stream.stop_stream()
         stream.close()
         p.terminate()
-    
-    # LLMからの回答の音声ファイルを削除
+
+    # 再生後にwavファイル削除
     os.remove(audio_output_file_path)
+
 
 def create_chain(system_template):
     """
@@ -137,6 +134,7 @@ def create_chain(system_template):
     )
 
     return chain
+
 
 def create_problem_and_play_audio():
     """
@@ -165,6 +163,7 @@ def create_problem_and_play_audio():
     play_wav(audio_output_file_path, st.session_state.speed)
 
     return problem, llm_response_audio
+
 
 def create_evaluation():
     """
