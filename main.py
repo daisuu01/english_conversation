@@ -218,7 +218,7 @@ if st.session_state.start_flg:
 
         # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
         st.session_state.messages.append({"role": "user", "content": audio_input_text})
-        st.session_state.messages.append({"role": "assistant", "content": llm_response})
+        st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
 
     # モード：「シャドーイング」
@@ -282,32 +282,37 @@ if st.session_state.start_flg:
     # モード：「自動英会話」
     # ================================
     if st.session_state.mode == ct.MODE_AUTO:
-        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します。")
+        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します（会話が自然に続きます）")
 
-        # 1️⃣ ユーザーが話す → 3秒沈黙で録音終了
-        buf = ft.record_until_silence(timeout_sec=3)
+        while True:
+            buf = ft.record_until_silence(timeout_sec=3)
 
-        # 2️⃣ 音声が取得できた場合のみ続行
-        if buf:
+            if not buf:
+                st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
+                continue
+
+            # ① ユーザー音声→文字起こし
             with st.spinner("音声を文字起こし中..."):
                 user_text = ft.transcribe_audio_buffer(buf)
 
-            # 3️⃣ ユーザーの発話を表示
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
             st.session_state.messages.append({"role": "user", "content": user_text})
 
-            # 4️⃣ LLMで応答を生成（会話履歴つき）
+            # ② LLM応答生成＋音声変換
             with st.spinner("AIが返答を考えています..."):
                 ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
 
-            # 5️⃣ 応答を画面に表示し、音声で再生
+            # ③ 応答表示＋再生
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
                 st.audio(audio_bytes, format="audio/mp3")
-
-            # 履歴保存
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
-            # 6️⃣ 次の発話を誘導
-            st.info("🗣️ あなたの次の発話を待っています...")
+            # ④ 次の発話へ
+            st.info("🗣️ 次の発話をどうぞ（3秒黙ると送信されます）")
+
+            # 🔸 Streamlitは自動ループに弱いため、ユーザーに停止手段を提供
+            if st.button("🛑 会話を終了", key=f"stop_{time.time()}"):
+                st.success("✅ 会話を終了しました。")
+                break
