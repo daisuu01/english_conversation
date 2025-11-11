@@ -279,14 +279,35 @@ def record_until_silence(
     silence_thresh_dbfs: int = -40,
 ):
     """
-    🎤 自動英会話モード用：
-    streamlit-webrtc でマイク音声を受信し、
-    「直近の発話から timeout_sec 秒以上の沈黙」が続いたら録音終了。
-
+    🎤 自動英会話モード用（クラウド対応版）：
+    - ローカル環境では streamlit-webrtc で自動録音
+    - Streamlit Cloud など webrtc_streamer が使えない環境では st.audio_input を使用
     戻り値:
         BytesIO (wav形式) or None（音声が取れなかった場合）
     """
 
+    # --- 🔍 まずは webrtc が使えるかどうか確認 ---
+    try:
+        from streamlit_webrtc import webrtc_streamer, WebRtcMode
+        webrtc_available = True
+    except Exception:
+        webrtc_available = False
+
+    # --- ☁️ Streamlit Cloud fallback ---
+    if not webrtc_available or "streamlit.io" in st.runtime.scriptrunner.script_run_ctx.main_script_path:
+        st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
+
+        audio = st.audio_input("🎙️ 音声を録音")
+        if audio is None:
+            st.warning("録音を待っています...")
+            return None
+
+        buf = io.BytesIO(audio.read())
+        buf.seek(0)
+        st.success("✅ 音声を取得しました！（Cloudモード）")
+        return buf
+
+    # --- 🖥️ ローカルモード（webrtc対応） ---
     st.info("🎤 話してください。話し終えて約3秒黙ると、自動でAIが返答します。")
 
     # ✅ webrtc_streamer をセッション内で1回だけ初期化
@@ -299,7 +320,6 @@ def record_until_silence(
 
     webrtc_ctx = st.session_state.webrtc_ctx
 
-    # audio_receiver がまだ準備できていない場合
     if not webrtc_ctx.audio_receiver:
         st.warning("マイク接続待機中です...")
         return None
@@ -312,25 +332,22 @@ def record_until_silence(
         try:
             frame = webrtc_ctx.audio_receiver.get_frame(timeout=1)
         except:
-            break  # 接続切れなど
+            break
 
         if frame is None:
             if started and (time.time() - last_voice_time) > timeout_sec:
                 break
             continue
 
-        # フレームをAudioSegment化
         segment = AudioSegment(
             frame.to_ndarray().tobytes(),
             sample_width=2,
             frame_rate=frame.sample_rate,
             channels=1,
         )
-
         audio_bytes += segment.raw_data
         started = True
 
-        # 無音検知
         sound = AudioSegment(
             data=audio_bytes,
             sample_width=2,
@@ -353,7 +370,6 @@ def record_until_silence(
     if not audio_bytes:
         return None
 
-    # BytesIOにwavとして書き出し
     buf = io.BytesIO()
     final = AudioSegment(
         data=audio_bytes,
@@ -364,8 +380,9 @@ def record_until_silence(
     final.export(buf, format="wav")
     buf.seek(0)
 
-    st.success("🛑 録音終了（自動検知）")
+    st.success("🛑 録音終了（自動検知・ローカルモード）")
     return buf
+
 
 
 
