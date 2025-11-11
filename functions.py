@@ -113,35 +113,60 @@ def save_to_wav(llm_response_audio, audio_output_file_path):
 
 def play_wav(audio_output_file_path, speed=1.0):
     """
-    音声ファイルの読み上げ
+    音声ファイルをブラウザ上で再生（PyAudio非依存版）
+    Cloud環境でも動作可能。
     Args:
         audio_output_file_path: 音声ファイルのパス
-        speed: 再生速度（1.0が通常速度、0.5で半分の速さ、2.0で倍速など）
+        speed: 再生速度（未使用・将来対応用）
     """
 
-    # waveモジュールでファイルを開いて再生
-    with wave.open(audio_output_file_path, 'rb') as play_target_file:
-        p = pyaudio.PyAudio()
+    try:
+        # 🔹 WAVファイルをバイナリで読み込む
+        with open(audio_output_file_path, "rb") as f:
+            audio_bytes = f.read()
 
-        # 再生ストリームを開く
-        stream = p.open(
-            format=p.get_format_from_width(play_target_file.getsampwidth()),
-            channels=play_target_file.getnchannels(),
-            rate=int(play_target_file.getframerate() * speed),
-            output=True
-        )
+        # 🔹 Streamlitでブラウザ再生（クラウド対応）
+        st.audio(audio_bytes, format="audio/wav")
 
-        data = play_target_file.readframes(1024)
-        while data:
-            stream.write(data)
-            data = play_target_file.readframes(1024)
+        # 🔹 再生後にファイル削除（不要ならこの行をコメントアウト）
+        if os.path.exists(audio_output_file_path):
+            os.remove(audio_output_file_path)
 
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+    except Exception as e:
+        st.error(f"音声の再生中にエラーが発生しました: {e}")
 
-    # 再生後にwavファイル削除
-    os.remove(audio_output_file_path)
+
+# def play_wav(audio_output_file_path, speed=1.0):
+#     """
+#     音声ファイルの読み上げ
+#     Args:
+#         audio_output_file_path: 音声ファイルのパス
+#         speed: 再生速度（1.0が通常速度、0.5で半分の速さ、2.0で倍速など）
+#     """
+
+#     # waveモジュールでファイルを開いて再生
+#     with wave.open(audio_output_file_path, 'rb') as play_target_file:
+#         p = pyaudio.PyAudio()
+
+#         # 再生ストリームを開く
+#         stream = p.open(
+#             format=p.get_format_from_width(play_target_file.getsampwidth()),
+#             channels=play_target_file.getnchannels(),
+#             rate=int(play_target_file.getframerate() * speed),
+#             output=True
+#         )
+
+#         data = play_target_file.readframes(1024)
+#         while data:
+#             stream.write(data)
+#             data = play_target_file.readframes(1024)
+
+#         stream.stop_stream()
+#         stream.close()
+#         p.terminate()
+
+#     # 再生後にwavファイル削除
+#     os.remove(audio_output_file_path)
 
 
 def create_chain(system_template):
