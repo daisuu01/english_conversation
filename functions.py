@@ -289,13 +289,17 @@ def record_until_silence(
 
     st.info("🎤 話してください。話し終えて約3秒黙ると、自動でAIが返答します。")
 
-    webrtc_ctx = webrtc_streamer(
-        key=f"auto_conversation_{int(time.time())}",
-        mode=WebRtcMode.RECVONLY,
-        media_stream_constraints={"audio": True, "video": False},
-    )
+    # ✅ webrtc_streamer をセッション内で1回だけ初期化
+    if "webrtc_ctx" not in st.session_state:
+        st.session_state.webrtc_ctx = webrtc_streamer(
+            key="auto_conversation",
+            mode=WebRtcMode.RECVONLY,
+            media_stream_constraints={"audio": True, "video": False},
+        )
 
-    # audio_receiver が準備できていない場合は一旦終了（次の再描画で再試行）
+    webrtc_ctx = st.session_state.webrtc_ctx
+
+    # audio_receiver がまだ準備できていない場合
     if not webrtc_ctx.audio_receiver:
         st.warning("マイク接続待機中です...")
         return None
@@ -304,7 +308,6 @@ def record_until_silence(
     last_voice_time = time.time()
     started = False
 
-    # 録音ループ
     while True:
         try:
             frame = webrtc_ctx.audio_receiver.get_frame(timeout=1)
@@ -312,12 +315,11 @@ def record_until_silence(
             break  # 接続切れなど
 
         if frame is None:
-            # 無音が続いている判定
             if started and (time.time() - last_voice_time) > timeout_sec:
                 break
             continue
 
-        # フレームをAudioSegment化（16bit PCM前提）
+        # フレームをAudioSegment化
         segment = AudioSegment(
             frame.to_ndarray().tobytes(),
             sample_width=2,
@@ -328,14 +330,13 @@ def record_until_silence(
         audio_bytes += segment.raw_data
         started = True
 
-        # サンプル全体から無音区間を検出し、最後に音があった時刻を更新
+        # 無音検知
         sound = AudioSegment(
             data=audio_bytes,
             sample_width=2,
             frame_rate=frame.sample_rate,
             channels=1,
         )
-
         nonsilent = silence.detect_nonsilent(
             sound,
             min_silence_len=min_silence_len_ms,
@@ -343,11 +344,9 @@ def record_until_silence(
         )
 
         if nonsilent:
-            # 最後の発話区間の終了ミリ秒
             last_voice_end_ms = nonsilent[-1][1]
             last_voice_time = time.time() - (len(sound) - last_voice_end_ms) / 1000.0
 
-        # 直近発話からtimeout_sec以上経過で終了
         if started and (time.time() - last_voice_time) > timeout_sec:
             break
 
@@ -367,6 +366,7 @@ def record_until_silence(
 
     st.success("🛑 録音終了（自動検知）")
     return buf
+
 
 
 
