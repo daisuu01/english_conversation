@@ -1,21 +1,41 @@
+# import streamlit as st
+# import os
+# import time
+# from pathlib import Path
+# import wave
+# import pyaudio
+# import subprocess
+# import numpy as np
+# from scipy.io.wavfile import write
+# from langchain.prompts import (
+#     ChatPromptTemplate,
+#     HumanMessagePromptTemplate,
+#     MessagesPlaceholder,
+# )
+# from langchain.schema import SystemMessage
+# from langchain.memory import ConversationSummaryBufferMemory
+# from langchain_openai import ChatOpenAI
+# from langchain.chains import ConversationChain
+# import constants as ct
 import streamlit as st
 import os
 import time
+import io
 from pathlib import Path
-import wave
-import pyaudio
 import subprocess
-import numpy as np
-from scipy.io.wavfile import write
+
+from pydub import AudioSegment, silence
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
+
 from langchain.prompts import (
     ChatPromptTemplate,
     HumanMessagePromptTemplate,
     MessagesPlaceholder,
 )
 from langchain.schema import SystemMessage
-from langchain.memory import ConversationSummaryBufferMemory
 from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
+
 import constants as ct
 
 
@@ -66,25 +86,51 @@ def record_audio(audio_input_file_path):
 #     else:
 #         st.stop()
 
-
 def transcribe_audio(audio_input_file_path):
     """
-    音声入力ファイルから文字起こしテキストを取得
-    Args:
-        audio_input_file_path: 音声入力ファイルのパス
+    既存モード用：音声ファイルから文字起こし（その後ファイル削除）
     """
-
-    with open(audio_input_file_path, 'rb') as audio_input_file:
+    with open(audio_input_file_path, "rb") as audio_input_file:
         transcript = st.session_state.openai_obj.audio.transcriptions.create(
             model="whisper-1",
             file=audio_input_file,
             language="en"
         )
-
-    # 音声入力ファイルを削除
     os.remove(audio_input_file_path)
-
     return transcript
+
+
+def transcribe_audio_buffer(audio_buffer):
+    """
+    自動会話モード用：BytesIO上の音声データをWhisperで文字起こし
+    """
+    audio_buffer.seek(0)
+    transcript = st.session_state.openai_obj.audio.transcriptions.create(
+        model="whisper-1",
+        file=audio_buffer,
+        language="en"
+    )
+    return transcript.text.strip()
+
+
+# def transcribe_audio(audio_input_file_path):
+#     """
+#     音声入力ファイルから文字起こしテキストを取得
+#     Args:
+#         audio_input_file_path: 音声入力ファイルのパス
+#     """
+
+#     with open(audio_input_file_path, 'rb') as audio_input_file:
+#         transcript = st.session_state.openai_obj.audio.transcriptions.create(
+#             model="whisper-1",
+#             file=audio_input_file,
+#             language="en"
+#         )
+
+#     # 音声入力ファイルを削除
+#     os.remove(audio_input_file_path)
+
+#     return transcript
 
 
 def save_to_wav(llm_response_audio, audio_output_file_path):
@@ -225,3 +271,141 @@ def create_evaluation():
     llm_response_evaluation = st.session_state.chain_evaluation.predict(input="")
 
     return llm_response_evaluation
+
+
+def record_until_silence(
+    timeout_sec: int = 3,
+    min_silence_len_ms: int = 800,
+    silence_thresh_dbfs: int = -40,
+):
+    """
+    🎤 自動英会話モード用：
+    streamlit-webrtc でマイク音声を受信し、
+    「直近の発話から timeout_sec 秒以上の沈黙」が続いたら録音終了。
+
+    戻り値:
+        BytesIO (wav形式) or None（音声が取れなかった場合）
+    """
+
+    st.info("🎤 話してください。話し終えて約3秒黙ると、自動でAIが返答します。")
+
+    webrtc_ctx = webrtc_streamer(
+        key="auto_conversation",
+        mode=WebRtcMode.RECVONLY,
+        media_stream_constraints={"audio": True, "video": False},
+    )
+
+    # audio_receiver が準備できていない場合は一旦終了（次の再描画で再試行）
+    if not webrtc_ctx.audio_receiver:
+        st.warning("マイク接続待機中です...")
+        return None
+
+    audio_bytes = b""
+    last_voice_time = time.time()
+    started = False
+
+    # 録音ループ
+    while True:
+        try:
+            frame = webrtc_ctx.audio_receiver.get_frame(timeout=1)
+        except:
+            break  # 接続切れなど
+
+        if frame is None:
+            # 無音が続いている判定
+            if started and (time.time() - last_voice_time) > timeout_sec:
+                break
+            continue
+
+        # フレームをAudioSegment化（16bit PCM前提）
+        segment = AudioSegment(
+            frame.to_ndarray().tobytes(),
+            sample_width=2,
+            frame_rate=frame.sample_rate,
+            channels=1,
+        )
+
+        audio_bytes += segment.raw_data
+        started = True
+
+        # サンプル全体から無音区間を検出し、最後に音があった時刻を更新
+        sound = AudioSegment(
+            data=audio_bytes,
+            sample_width=2,
+            frame_rate=frame.sample_rate,
+            channels=1,
+        )
+
+        nonsilent = silence.detect_nonsilent(
+            sound,
+            min_silence_len=min_silence_len_ms,
+            silence_thresh=silence_thresh_dbfs,
+        )
+
+        if nonsilent:
+            # 最後の発話区間の終了ミリ秒
+            last_voice_end_ms = nonsilent[-1][1]
+            last_voice_time = time.time() - (len(sound) - last_voice_end_ms) / 1000.0
+
+        # 直近発話からtimeout_sec以上経過で終了
+        if started and (time.time() - last_voice_time) > timeout_sec:
+            break
+
+    if not audio_bytes:
+        return None
+
+    # BytesIOにwavとして書き出し
+    buf = io.BytesIO()
+    final = AudioSegment(
+        data=audio_bytes,
+        sample_width=2,
+        frame_rate=16000,
+        channels=1,
+    )
+    final.export(buf, format="wav")
+    buf.seek(0)
+
+    st.success("🛑 録音終了（自動検知）")
+    return buf
+
+
+
+def generate_ai_response_auto(user_text: str):
+    """
+    自動英会話モード用：
+    - 会話履歴つきでAI応答を生成
+    - TTSで音声も生成
+    戻り値:
+        (ai_text: str, audio_bytes: bytes)
+    """
+
+    # すでに main.py 側で st.session_state.llm / memory は用意している想定
+    prompt = ChatPromptTemplate.from_messages([
+        SystemMessage(
+            content=(
+                "You are a friendly English conversation partner. "
+                "Keep responses concise and natural. Correct the user's English gently within the reply."
+            )
+        ),
+        MessagesPlaceholder(variable_name="history"),
+        HumanMessagePromptTemplate.from_template("{input}"),
+    ])
+
+    chain = ConversationChain(
+        llm=st.session_state.llm,
+        memory=st.session_state.memory,
+        prompt=prompt,
+    )
+
+    ai_text = chain.predict(input=user_text)
+
+    tts_res = st.session_state.openai_obj.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=ai_text,
+    )
+
+    # OpenAI SDKのresponseは .content or .read() でバイト列取得（環境に合わせて）
+    audio_bytes = tts_res.content if hasattr(tts_res, "content") else tts_res.read()
+
+    return ai_text, audio_bytes

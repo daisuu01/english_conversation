@@ -71,7 +71,12 @@ with col1:
 with col2:
     st.session_state.speed = st.selectbox(label="再生速度", options=ct.PLAY_SPEED_OPTION, index=3, label_visibility="collapsed")
 with col3:
-    st.session_state.mode = st.selectbox(label="モード", options=[ct.MODE_1, ct.MODE_2, ct.MODE_3], label_visibility="collapsed")
+    # 🆕 自動英会話モードを追加
+    st.session_state.mode = st.selectbox(
+        label="モード",
+        options=[ct.MODE_1, ct.MODE_2, ct.MODE_3, ct.MODE_AUTO],
+        label_visibility="collapsed"
+    )
     # モードを変更した際の処理
     if st.session_state.mode != st.session_state.pre_mode:
         # 自動でそのモードの処理が実行されないようにする
@@ -203,27 +208,13 @@ if st.session_state.start_flg:
         with st.chat_message("user", avatar=ct.USER_ICON_PATH):
             st.markdown(audio_input_text)
 
-        with st.spinner("回答の音声読み上げ準備中..."):
-            # ユーザー入力値をLLMに渡して回答取得
-            llm_response = st.session_state.chain_basic_conversation.predict(input=audio_input_text)
-            
-            # LLMからの回答を音声データに変換
-            llm_response_audio = st.session_state.openai_obj.audio.speech.create(
-                model="tts-1",
-                voice="alloy",
-                input=llm_response
-            )
+        with st.spinner("AIが返答を生成中..."):
+            ai_text, audio_bytes = ft.generate_ai_response_auto(audio_input_text)
 
-            # 一旦mp3形式で音声ファイル作成後、wav形式に変換
-            audio_output_file_path = f"{ct.AUDIO_OUTPUT_DIR}/audio_output_{int(time.time())}.wav"
-            ft.save_to_wav(llm_response_audio.content, audio_output_file_path)
-
-        # 音声ファイルの読み上げ
-        ft.play_wav(audio_output_file_path, speed=st.session_state.speed)
-
-        # AIメッセージの画面表示とリストへの追加
         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(llm_response)
+            st.markdown(ai_text)
+            st.audio(audio_bytes, format="audio/mp3")
+
 
         # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
         st.session_state.messages.append({"role": "user", "content": audio_input_text})
@@ -285,3 +276,38 @@ if st.session_state.start_flg:
 
         # 「シャドーイング」ボタンを表示するために再描画
         st.rerun()
+
+
+    # ================================
+    # モード：「自動英会話」
+    # ================================
+    if st.session_state.mode == ct.MODE_AUTO:
+        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します。")
+
+        # 1️⃣ ユーザーが話す → 3秒沈黙で録音終了
+        buf = ft.record_until_silence(timeout_sec=3)
+
+        # 2️⃣ 音声が取得できた場合のみ続行
+        if buf:
+            with st.spinner("音声を文字起こし中..."):
+                user_text = ft.transcribe_audio_buffer(buf)
+
+            # 3️⃣ ユーザーの発話を表示
+            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+                st.markdown(user_text)
+            st.session_state.messages.append({"role": "user", "content": user_text})
+
+            # 4️⃣ LLMで応答を生成（会話履歴つき）
+            with st.spinner("AIが返答を考えています..."):
+                ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
+
+            # 5️⃣ 応答を画面に表示し、音声で再生
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(ai_text)
+                st.audio(audio_bytes, format="audio/mp3")
+
+            # 履歴保存
+            st.session_state.messages.append({"role": "assistant", "content": ai_text})
+
+            # 6️⃣ 次の発話を誘導
+            st.info("🗣️ あなたの次の発話を待っています...")
