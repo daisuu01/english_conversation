@@ -17,7 +17,7 @@ streamlit run main.py
 https://share.streamlit.io/
 ###############################################
 git add .
-git commit -m "チャット機能拡充"
+git commit -m "英会話"
 git push
 
 git pull

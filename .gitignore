@@ -166,4 +166,4 @@ audio/input/*.wav
 audio/output/*.wav
 
 
-.streamlit/config.toml
+.streamlit/secrets.toml
