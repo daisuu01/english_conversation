@@ -290,7 +290,7 @@ def record_until_silence(
     st.info("🎤 話してください。話し終えて約3秒黙ると、自動でAIが返答します。")
 
     webrtc_ctx = webrtc_streamer(
-        key="auto_conversation",
+        key=f"auto_conversation_{int(time.time())}",
         mode=WebRtcMode.RECVONLY,
         media_stream_constraints={"audio": True, "video": False},
     )
