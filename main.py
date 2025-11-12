@@ -208,7 +208,7 @@ if st.session_state.start_flg:
             st.markdown(audio_input_text)
 
         with st.spinner("AIが返答を生成中..."):
-            ai_text, audio_bytes = ft.generate_ai_response_auto(audio_input_text)
+            ai_text, audio_bytes = ft.generate_ai_response(audio_input_text)
 
         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
             st.markdown(ai_text)
