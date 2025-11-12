@@ -273,76 +273,24 @@ def create_evaluation():
     return llm_response_evaluation
 
 
-def record_until_silence(timeout_sec: int = 3, webrtc_ctx=None):
+def record_until_silence(timeout_sec: int = 3):
     """
-    🎤 自動英会話モード用（Cloud対応版）
-    - 初回でマイク許可を取った webrtc_ctx を使い、沈黙検知で録音自動停止
-    - webrtc_ctx がない場合は None を返す
-    戻り値:
-        BytesIO (wav形式) or None（音声が取れなかった場合）
+    🎤 自動英会話モード用（Cloud専用簡易版）
+    - Streamlit Cloudでは webrtc が使えないため、st.audio_input を使用。
+    - 1回話すたびに BytesIO の音声を返す。
     """
-    from pydub import AudioSegment, silence
-    import io, time
+    st.info("🎤 話してください。話し終えたら自動で認識します。")
 
-    if not webrtc_ctx or not webrtc_ctx.audio_receiver:
+    audio = st.audio_input("🎙️ あなたの発話（自動検出）")
+    if not audio:
+        st.warning("録音を待っています...")
         return None
 
-    audio_bytes = b""
-    last_voice_time = time.time()
-    started = False
-
-    while True:
-        try:
-            frame = webrtc_ctx.audio_receiver.get_frame(timeout=1)
-        except Exception:
-            break
-
-        if frame is None:
-            if started and (time.time() - last_voice_time) > timeout_sec:
-                break
-            continue
-
-        segment = AudioSegment(
-            frame.to_ndarray().tobytes(),
-            sample_width=2,
-            frame_rate=frame.sample_rate,
-            channels=1
-        )
-        audio_bytes += segment.raw_data
-        started = True
-
-        sound = AudioSegment(
-            data=audio_bytes,
-            sample_width=2,
-            frame_rate=frame.sample_rate,
-            channels=1
-        )
-
-        nonsilent = silence.detect_nonsilent(
-            sound,
-            min_silence_len=800,
-            silence_thresh=-40
-        )
-        if nonsilent:
-            last_voice_end_ms = nonsilent[-1][1]
-            last_voice_time = time.time() - (len(sound) - last_voice_end_ms) / 1000.0
-
-        if started and (time.time() - last_voice_time) > timeout_sec:
-            break
-
-    if not audio_bytes:
-        return None
-
-    buf = io.BytesIO()
-    final = AudioSegment(
-        data=audio_bytes,
-        sample_width=2,
-        frame_rate=16000,
-        channels=1
-    )
-    final.export(buf, format="wav")
+    buf = io.BytesIO(audio.read())
     buf.seek(0)
+    st.success("✅ 音声を取得しました！（Cloudモード）")
     return buf
+
 
 # def record_until_silence(
 #     timeout_sec: int = 3,
