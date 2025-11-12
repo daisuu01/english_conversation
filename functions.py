@@ -294,6 +294,12 @@ def record_until_silence(
         webrtc_available = False
 
     # --- ☁️ Streamlit Cloud fallback ---
+    try:
+        # Streamlit Cloud 環境かどうかを安全に検出
+        is_cloud = "STREAMLIT_SERVER_RUN_ONCE" in os.environ or "streamlit.io" in st.__file__
+    except Exception:
+        is_cloud = False
+
     if not webrtc_available or is_cloud:
         st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
 
