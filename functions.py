@@ -100,17 +100,25 @@ def transcribe_audio(audio_input_file_path):
     return transcript
 
 
-def transcribe_audio_buffer(audio_buffer):
+def transcribe_audio_buffer(buf):
     """
-    自動会話モード用：BytesIO上の音声データをWhisperで文字起こし
+    🔊 BytesIO音声をWhisperで文字起こし
     """
-    audio_buffer.seek(0)
-    transcript = st.session_state.openai_obj.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_buffer,
-        language="en"
-    )
-    return transcript.text.strip()
+    import io
+
+    # 念のため先頭に戻す
+    buf.seek(0)
+
+    try:
+        transcript = st.session_state.openai_obj.audio.transcriptions.create(
+            model="gpt-4o-mini-transcribe",   # ここは確実に存在するモデル名
+            file=("speech.wav", buf, "audio/wav")  # ← ファイル名・MIMEタイプを明示
+        )
+        return transcript.text.strip()
+    except Exception as e:
+        st.error(f"🎧 音声認識エラー: {e}")
+        return ""
+
 
 
 # def transcribe_audio(audio_input_file_path):
@@ -288,7 +296,14 @@ def record_until_silence(timeout_sec: int = 3):
 
     buf = io.BytesIO(audio.read())
     buf.seek(0)
-    st.success("✅ 音声を取得しました！（Cloudモード）")
+
+    # ✅ 無音・空データ対策
+    size = len(buf.getvalue())
+    if size < 2000:  # 約0.1秒未満の音声
+        st.warning("⚠️ 音声が短すぎます。もう一度お話しください。")
+        return None
+
+    st.success(f"✅ 音声を取得しました！（Cloudモード, {size} bytes）")
     return buf
 
 
