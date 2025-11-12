@@ -279,56 +279,39 @@ if st.session_state.start_flg:
 
 
     # ================================
-    # モード：「自動英会話」
+    # モード：「自動英会話」改良版
     # ================================
     if st.session_state.mode == ct.MODE_AUTO:
-        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します（会話が自然に続きます）")
+        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します")
 
-        while True:
-            try:
-                # 🔸 functions.py 側でクラウド対応済みなのでそのまま呼び出し
+        # 1. 録音ボタンを押すたびに1ターン実行
+        if st.button("🎙️ 話す（自動検出開始）"):
+            with st.spinner("録音中...（3秒黙ると自動停止）"):
                 buf = ft.record_until_silence(timeout_sec=3)
-            except Exception as e:
-                st.error(f"録音中にエラーが発生しました: {e}")
-                st.warning("☁️ Streamlit Cloudでは自動録音が制限されている場合があります。")
-                st.info("下のマイクボタンで手動録音を行ってください。")
-                buf = ft.record_until_silence_cloud() if hasattr(ft, "record_until_silence_cloud") else None
 
             if not buf:
                 st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
-                continue
+                st.stop()
 
-            # ① ユーザー音声 → テキスト変換
+            # 2. 音声→テキスト
             with st.spinner("音声を文字起こし中..."):
-                try:
-                    user_text = ft.transcribe_audio_buffer(buf)
-                except Exception as e:
-                    st.error(f"文字起こしエラー: {e}")
-                    continue
-
+                user_text = ft.transcribe_audio_buffer(buf)
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
             st.session_state.messages.append({"role": "user", "content": user_text})
 
-            # ② AI応答生成＋音声化
+            # 3. AI応答＋音声再生
             with st.spinner("AIが返答を考えています..."):
-                try:
-                    ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
-                except Exception as e:
-                    st.error(f"AI応答生成エラー: {e}")
-                    continue
-
-            # ③ 表示＋音声再生
+                ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
                 st.audio(audio_bytes, format="audio/mp3")
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
-            # ④ 次の発話へ
-            st.info("🗣️ 次の発話をどうぞ（3秒黙ると送信されます）")
+            # 4. 自動で次ターンに進む
+            st.rerun()
 
-            # 🔸 Streamlitは無限ループに弱いため、停止ボタンを必ず設置
-            if st.button("🛑 会話を終了", key=f"stop_{time.time()}"):
-                st.success("✅ 会話を終了しました。")
-                break
+        # 終了ボタン
+        st.button("🛑 会話を終了", key="stop_auto", type="secondary")
+
 
