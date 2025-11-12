@@ -348,18 +348,19 @@ if st.session_state.start_flg:
             except Exception as e:
                 st.warning(f"音声生成に失敗しました: {e}")
 
-        # 3️⃣ 会話ループ（Cloud専用：st.audio_inputで毎回録音）
+        # 3️⃣ 会話ループ（Cloud専用：functions.pyに録音処理を委譲）
         while True:
             st.info("🎤 話してください。3秒ほど黙ると録音が完了します。")
 
-            audio = st.audio_input("🎙️ あなたの発話（自動検出）")
-            if not audio:
-                st.stop()  # ユーザーがまだ話していない間は停止
+            with st.spinner("音声を取得中..."):
+                buf = ft.record_until_silence(timeout_sec=3)
+
+            if not buf:
+                st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
+                st.stop()
 
             # 音声 → テキスト変換
             with st.spinner("音声を文字起こし中..."):
-                buf = io.BytesIO(audio.read())
-                buf.seek(0)
                 user_text = ft.transcribe_audio_buffer(buf)
 
             # ユーザーの発話を表示
@@ -378,6 +379,5 @@ if st.session_state.start_flg:
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
             st.session_state.last_ai = ai_text
 
-            # ループ継続（自動ラリー）
+            # 次のラリーへ（会話継続）
             st.rerun()
-
