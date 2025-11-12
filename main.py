@@ -278,40 +278,120 @@ if st.session_state.start_flg:
         st.rerun()
 
 
+    # # ================================
+    # # モード：「自動英会話」改良版
+    # # ================================
+    # if st.session_state.mode == ct.MODE_AUTO:
+    #     st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します")
+
+    #     # 1. 録音ボタンを押すたびに1ターン実行
+    #     if st.button("🎙️ 話す（自動検出開始）"):
+    #         with st.spinner("録音中...（3秒黙ると自動停止）"):
+    #             buf = ft.record_until_silence(timeout_sec=3)
+
+    #         if not buf:
+    #             st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
+    #             st.stop()
+
+    #         # 2. 音声→テキスト
+    #         with st.spinner("音声を文字起こし中..."):
+    #             user_text = ft.transcribe_audio_buffer(buf)
+    #         with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+    #             st.markdown(user_text)
+    #         st.session_state.messages.append({"role": "user", "content": user_text})
+
+    #         # 3. AI応答＋音声再生
+    #         with st.spinner("AIが返答を考えています..."):
+    #             ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
+    #         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+    #             st.markdown(ai_text)
+    #             st.audio(audio_bytes, format="audio/mp3")
+    #         st.session_state.messages.append({"role": "assistant", "content": ai_text})
+
+    #         # 4. 自動で次ターンに進む
+    #         st.rerun()
+
+    #     # 終了ボタン
+    #     st.button("🛑 会話を終了", key="stop_auto", type="secondary")
+
+
     # ================================
-    # モード：「自動英会話」改良版
+    # モード：「自動英会話」ラリーモード（Cloud対応）
     # ================================
     if st.session_state.mode == ct.MODE_AUTO:
-        st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します")
+        st.info("🎧 自動モード：最初の1回だけマイクを許可してください。その後は自動で会話が続きます。")
 
-        # 1. 録音ボタンを押すたびに1ターン実行
-        if st.button("🎙️ 話す（自動検出開始）"):
-            with st.spinner("録音中...（3秒黙ると自動停止）"):
-                buf = ft.record_until_silence(timeout_sec=3)
+        # 1️⃣ 初回のみマイクを許可
+        if "mic_ready" not in st.session_state:
+            if st.button("🎙️ 英会話を開始（マイク許可）"):
+                st.session_state.webrtc_ctx = webrtc_streamer(
+                    key="auto_conversation",
+                    mode=WebRtcMode.RECVONLY,
+                    media_stream_constraints={"audio": True, "video": False},
+                )
+                st.session_state.mic_ready = True
+                st.rerun()
+            st.stop()
+
+        webrtc_ctx = st.session_state.webrtc_ctx
+        if not webrtc_ctx or not webrtc_ctx.audio_receiver:
+            st.warning("マイク接続を確認しています...")
+            st.stop()
+
+        # 2️⃣ 会話履歴の初期化
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+            st.session_state.last_ai = "Hi! How are you today?"
+            st.session_state.messages.append(
+                {"role": "assistant", "content": st.session_state.last_ai}
+            )
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(st.session_state.last_ai)
+
+            # 初回AI発話の音声再生
+            try:
+                tts = st.session_state.openai_obj.audio.speech.create(
+                    model="tts-1",
+                    voice="alloy",
+                    input=st.session_state.last_ai,
+                )
+                st.audio(tts.content, format="audio/mp3")
+            except Exception as e:
+                st.warning(f"音声合成エラー: {e}")
+
+        # 3️⃣ 自動ループ：話す → AI返答 → 再開
+        while True:
+            with st.spinner("話してください。3秒黙ると録音が停止します..."):
+                buf = ft.record_until_silence(timeout_sec=3, webrtc_ctx=webrtc_ctx)
 
             if not buf:
-                st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
-                st.stop()
+                st.warning("音声が検出されませんでした。もう一度お話しください。")
+                continue
 
-            # 2. 音声→テキスト
-            with st.spinner("音声を文字起こし中..."):
+            # 音声 → テキスト変換
+            try:
                 user_text = ft.transcribe_audio_buffer(buf)
+            except Exception as e:
+                st.warning(f"音声認識に失敗しました: {e}")
+                continue
+
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
             st.session_state.messages.append({"role": "user", "content": user_text})
 
-            # 3. AI応答＋音声再生
-            with st.spinner("AIが返答を考えています..."):
+            # AI応答生成
+            try:
                 ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
+            except Exception as e:
+                st.warning(f"AI応答生成中にエラー: {e}")
+                continue
+
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
                 st.audio(audio_bytes, format="audio/mp3")
+
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
+            st.session_state.last_ai = ai_text
 
-            # 4. 自動で次ターンに進む
-            st.rerun()
-
-        # 終了ボタン
-        st.button("🛑 会話を終了", key="stop_auto", type="secondary")
-
-
+            # 少し間を空けて次ターンへ
+            time.sleep(2)
