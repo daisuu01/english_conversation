@@ -17,7 +17,6 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 import functions as ft
 import constants as ct
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 # 各種設定
 load_dotenv()
@@ -357,13 +356,13 @@ if st.session_state.start_flg:
 
             if not buf:
                 st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
-                st.stop()
+                st.stop()  # ここでいったん描画を止め、次のターンへ
 
             # 音声 → テキスト変換
             with st.spinner("音声を文字起こし中..."):
                 user_text = ft.transcribe_audio_buffer(buf)
 
-            # ユーザーの発話を表示
+            # ユーザー発話の表示
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
             st.session_state.messages.append({"role": "user", "content": user_text})
@@ -379,5 +378,5 @@ if st.session_state.start_flg:
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
             st.session_state.last_ai = ai_text
 
-            # 次のラリーへ（会話継続）
+            # 次のラリーへ（自動で次の録音へ進める）
             st.rerun()

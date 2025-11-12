@@ -25,7 +25,6 @@ from pathlib import Path
 import subprocess
 
 from pydub import AudioSegment, silence
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 from langchain.prompts import (
     ChatPromptTemplate,
@@ -103,21 +102,33 @@ def transcribe_audio(audio_input_file_path):
 def transcribe_audio_buffer(buf):
     """
     🔊 BytesIO音声をWhisperで文字起こし
+    - gpt-4o-mini-transcribe → whisper-1 の順にフォールバック
     """
-    import io
-
-    # 念のため先頭に戻す
     buf.seek(0)
 
-    try:
-        transcript = st.session_state.openai_obj.audio.transcriptions.create(
-            model="gpt-4o-mini-transcribe",   # ここは確実に存在するモデル名
-            file=("speech.wav", buf, "audio/wav")  # ← ファイル名・MIMEタイプを明示
+    client = st.session_state.openai_obj
+
+    def _call(model_name):
+        return client.audio.transcriptions.create(
+            model=model_name,
+            file=("speech.wav", buf, "audio/wav"),
+            language="en"
         )
-        return transcript.text.strip()
-    except Exception as e:
-        st.error(f"🎧 音声認識エラー: {e}")
-        return ""
+
+    try:
+        # ① 高速モデル（mini）を優先
+        resp = _call("gpt-4o-mini-transcribe")
+        return resp.text.strip()
+    except Exception:
+        try:
+            # ② Whisper にフォールバック
+            buf.seek(0)
+            resp = _call("whisper-1")
+            return resp.text.strip()
+        except Exception as e:
+            st.error(f"音声認識に失敗しました: {e}")
+            return ""
+
 
 
 
@@ -297,14 +308,14 @@ def record_until_silence(timeout_sec: int = 3):
     buf = io.BytesIO(audio.read())
     buf.seek(0)
 
-    # ✅ 無音・空データ対策
-    size = len(buf.getvalue())
-    if size < 2000:  # 約0.1秒未満の音声
+    # ✅ 無音・短音防止
+    if len(buf.getvalue()) < 2000:
         st.warning("⚠️ 音声が短すぎます。もう一度お話しください。")
         return None
 
-    st.success(f"✅ 音声を取得しました！（Cloudモード, {size} bytes）")
+    st.success("✅ 音声を取得しました！（Cloudモード）")
     return buf
+
 
 
 # def record_until_silence(
