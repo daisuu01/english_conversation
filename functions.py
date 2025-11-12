@@ -279,39 +279,66 @@ def record_until_silence(
     silence_thresh_dbfs: int = -40,
 ):
     """
-    🎤 自動英会話モード用（クラウド対応版）：
-    - ローカル環境では streamlit-webrtc で自動録音
-    - Streamlit Cloud など webrtc_streamer が使えない環境では st.audio_input を使用
+    🎤 自動英会話モード用（Cloud専用簡易版）
+    - Streamlit Cloudでwebrtcが動かないため、st.audio_inputを常に使用。
+    - ローカル環境でも安全に動作。
     戻り値:
         BytesIO (wav形式) or None（音声が取れなかった場合）
     """
 
-    # --- 🔍 まずは webrtc が使えるかどうか確認 ---
-    try:
-        from streamlit_webrtc import webrtc_streamer, WebRtcMode
-        webrtc_available = True
-    except Exception:
-        webrtc_available = False
+    st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
 
-    # --- ☁️ Streamlit Cloud fallback ---
-    try:
-        # Streamlit Cloud 環境かどうかを安全に検出
-        is_cloud = "STREAMLIT_SERVER_RUN_ONCE" in os.environ or "streamlit.io" in st.__file__
-    except Exception:
-        is_cloud = False
+    audio = st.audio_input("🎙️ 音声を録音")
+    if audio is None:
+        st.warning("録音を待っています...")
+        return None
 
-    if not webrtc_available or is_cloud:
-        st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
+    # バイナリデータをBytesIOに保存
+    buf = io.BytesIO(audio.read())
+    buf.seek(0)
 
-        audio = st.audio_input("🎙️ 音声を録音")
-        if audio is None:
-            st.warning("録音を待っています...")
-            return None
+    st.success("✅ 音声を取得しました！（Cloudモード・簡易版）")
+    return buf
 
-        buf = io.BytesIO(audio.read())
-        buf.seek(0)
-        st.success("✅ 音声を取得しました！（Cloudモード）")
-        return buf
+# def record_until_silence(
+#     timeout_sec: int = 3,
+#     min_silence_len_ms: int = 800,
+#     silence_thresh_dbfs: int = -40,
+# ):
+#     """
+#     🎤 自動英会話モード用（クラウド対応版）：
+#     - ローカル環境では streamlit-webrtc で自動録音
+#     - Streamlit Cloud など webrtc_streamer が使えない環境では st.audio_input を使用
+#     戻り値:
+#         BytesIO (wav形式) or None（音声が取れなかった場合）
+#     """
+
+#     # --- 🔍 まずは webrtc が使えるかどうか確認 ---
+#     try:
+#         from streamlit_webrtc import webrtc_streamer, WebRtcMode
+#         webrtc_available = True
+#     except Exception:
+#         webrtc_available = False
+
+#     # --- ☁️ Streamlit Cloud fallback ---
+#     try:
+#         # Streamlit Cloud 環境かどうかを安全に検出
+#         is_cloud = "STREAMLIT_SERVER_RUN_ONCE" in os.environ or "streamlit.io" in st.__file__
+#     except Exception:
+#         is_cloud = False
+
+#     if not webrtc_available or is_cloud:
+#         st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
+
+#         audio = st.audio_input("🎙️ 音声を録音")
+#         if audio is None:
+#             st.warning("録音を待っています...")
+#             return None
+
+#         buf = io.BytesIO(audio.read())
+#         buf.seek(0)
+#         st.success("✅ 音声を取得しました！（Cloudモード）")
+#         return buf
 
     # --- 🖥️ ローカルモード（webrtc対応） ---
     st.info("🎤 話してください。話し終えて約3秒黙ると、自動でAIが返答します。")
