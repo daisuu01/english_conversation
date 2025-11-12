@@ -43,26 +43,6 @@ def record_audio(audio_input_file_path):
 
 
 
-# def record_audio(audio_input_file_path):
-#     """
-#     🎤 Streamlit標準のst.audio_inputを使用して音声を録音・保存する関数
-#     Args:
-#         audio_input_file_path: 保存先のファイルパス
-#     """
-
-#     st.info("下のマイクボタンを押して話してください。録音後、自動で保存されます。")
-
-#     # Streamlit標準の音声入力コンポーネント
-#     audio_bytes = st.audio_input("🎙️ 音声を録音してください")
-
-#     # 録音された場合のみ保存
-#     if audio_bytes:
-#         with open(audio_input_file_path, "wb") as f:
-#             f.write(audio_bytes)
-#         st.success("✅ 音声が保存されました！")
-#     else:
-#         st.stop()
-
 def transcribe_audio(audio_input_file_path):
     """
     既存モード用：音声ファイルから文字起こし（その後ファイル削除）
@@ -237,3 +217,36 @@ def create_evaluation():
 
     return llm_response_evaluation
 
+
+def generate_ai_response(user_text: str):
+    """
+    英会話モード共通のAI応答生成＋TTS音声生成
+    """
+    prompt = ChatPromptTemplate.from_messages([
+        SystemMessage(
+            content=(
+                "You are a friendly English conversation partner. "
+                "Keep responses concise and natural. Correct the user's English gently within the reply."
+            )
+        ),
+        MessagesPlaceholder(variable_name="history"),
+        HumanMessagePromptTemplate.from_template("{input}"),
+    ])
+
+    chain = ConversationChain(
+        llm=st.session_state.llm,
+        memory=st.session_state.memory,
+        prompt=prompt,
+    )
+
+    ai_text = chain.predict(input=user_text)
+
+    # 🔊 AI応答を音声化
+    tts_res = st.session_state.openai_obj.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=ai_text,
+    )
+
+    audio_bytes = tts_res.content if hasattr(tts_res, "content") else tts_res.read()
+    return ai_text, audio_bytes
