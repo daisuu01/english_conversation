@@ -73,7 +73,7 @@ with col3:
     # 🆕 自動英会話モードを追加
     st.session_state.mode = st.selectbox(
         label="モード",
-        options=[ct.MODE_1, ct.MODE_2, ct.MODE_3, ct.MODE_AUTO],
+        options=[ct.MODE_1, ct.MODE_2, ct.MODE_3],
         label_visibility="collapsed"
     )
     # モードを変更した際の処理
@@ -275,108 +275,3 @@ if st.session_state.start_flg:
 
         # 「シャドーイング」ボタンを表示するために再描画
         st.rerun()
-
-
-    # # ================================
-    # # モード：「自動英会話」改良版
-    # # ================================
-    # if st.session_state.mode == ct.MODE_AUTO:
-    #     st.info("🎧 自動モード：話したあと3秒黙るとAIが返答します")
-
-    #     # 1. 録音ボタンを押すたびに1ターン実行
-    #     if st.button("🎙️ 話す（自動検出開始）"):
-    #         with st.spinner("録音中...（3秒黙ると自動停止）"):
-    #             buf = ft.record_until_silence(timeout_sec=3)
-
-    #         if not buf:
-    #             st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
-    #             st.stop()
-
-    #         # 2. 音声→テキスト
-    #         with st.spinner("音声を文字起こし中..."):
-    #             user_text = ft.transcribe_audio_buffer(buf)
-    #         with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-    #             st.markdown(user_text)
-    #         st.session_state.messages.append({"role": "user", "content": user_text})
-
-    #         # 3. AI応答＋音声再生
-    #         with st.spinner("AIが返答を考えています..."):
-    #             ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
-    #         with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-    #             st.markdown(ai_text)
-    #             st.audio(audio_bytes, format="audio/mp3")
-    #         st.session_state.messages.append({"role": "assistant", "content": ai_text})
-
-    #         # 4. 自動で次ターンに進む
-    #         st.rerun()
-
-    #     # 終了ボタン
-    #     st.button("🛑 会話を終了", key="stop_auto", type="secondary")
-
-
-    # ================================
-    # モード：「自動英会話」ラリーモード（Cloud安定版）
-    # ================================
-    if st.session_state.mode == ct.MODE_AUTO:
-        st.info("🎧 自動モード：最初の1回だけボタンを押してください。その後は自動でAIが返答します。")
-
-        # 1️⃣ 初回トリガー
-        if "auto_talk_started" not in st.session_state:
-            if st.button("🎙️ 英会話を開始"):
-                st.session_state.auto_talk_started = True
-                st.rerun()
-            st.stop()
-
-        # 2️⃣ 会話履歴初期化
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-            st.session_state.last_ai = "Hi! How are you today?"
-            st.session_state.messages.append({"role": "assistant", "content": st.session_state.last_ai})
-
-            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-                st.markdown(st.session_state.last_ai)
-
-            # 初回AI音声再生
-            try:
-                tts = st.session_state.openai_obj.audio.speech.create(
-                    model="tts-1",
-                    voice="alloy",
-                    input=st.session_state.last_ai,
-                )
-                st.audio(tts.content, format="audio/mp3")
-            except Exception as e:
-                st.warning(f"音声生成に失敗しました: {e}")
-
-        # 3️⃣ 会話ループ（Cloud専用：functions.pyに録音処理を委譲）
-        while True:
-            st.info("🎤 話してください。3秒ほど黙ると録音が完了します。")
-
-            with st.spinner("音声を取得中..."):
-                buf = ft.record_until_silence(timeout_sec=3)
-
-            if not buf:
-                st.warning("🎙️ 音声が検出されませんでした。もう一度話してください。")
-                st.stop()  # ここでいったん描画を止め、次のターンへ
-
-            # 音声 → テキスト変換
-            with st.spinner("音声を文字起こし中..."):
-                user_text = ft.transcribe_audio_buffer(buf)
-
-            # ユーザー発話の表示
-            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-                st.markdown(user_text)
-            st.session_state.messages.append({"role": "user", "content": user_text})
-
-            # AI応答生成
-            with st.spinner("AIが返答を考えています..."):
-                ai_text, audio_bytes = ft.generate_ai_response_auto(user_text)
-
-            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-                st.markdown(ai_text)
-                st.audio(audio_bytes, format="audio/mp3")
-
-            st.session_state.messages.append({"role": "assistant", "content": ai_text})
-            st.session_state.last_ai = ai_text
-
-            # 次のラリーへ（自動で次の録音へ進める）
-            st.rerun()

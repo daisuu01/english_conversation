@@ -9,10 +9,9 @@ APP_NAME = "生成AI英会話アプリ"
 MODE_1 = "日常英会話"
 MODE_2 = "シャドーイング"
 MODE_3 = "ディクテーション"
-MODE_AUTO = "自動英会話"  # 🆕 追加
 
 # モード一覧
-MODE_LIST = [MODE_1, MODE_2, MODE_3, MODE_AUTO]  # 🆕 修正済み
+MODE_LIST = [MODE_1, MODE_2, MODE_3]  
 
 # 各種パス
 USER_ICON_PATH = "images/user_icon.jpg"
