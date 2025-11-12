@@ -294,7 +294,7 @@ def record_until_silence(
         webrtc_available = False
 
     # --- ☁️ Streamlit Cloud fallback ---
-    if not webrtc_available or "streamlit.io" in st.runtime.scriptrunner.script_run_ctx.main_script_path:
+    if not webrtc_available or is_cloud:
         st.info("🎤 下のマイクボタンを押して話してください。話し終えたら自動で認識します。")
 
         audio = st.audio_input("🎙️ 音声を録音")
