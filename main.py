@@ -17,7 +17,7 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 import functions as ft
 import constants as ct
-
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 
 # 各種設定
 load_dotenv()
