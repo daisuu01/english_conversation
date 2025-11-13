@@ -16,30 +16,30 @@ from langchain.chains import ConversationChain
 import constants as ct
 
 
-def record_audio(audio_input_file_path):
-    """
-    🎤 Streamlit標準のst.audio_inputを使用して音声を録音・保存する関数
-    Args:
-        audio_input_file_path: 保存先のファイルパス
-    """
+# def record_audio(audio_input_file_path):
+#     """
+#     🎤 Streamlit標準のst.audio_inputを使用して音声を録音・保存する関数
+#     Args:
+#         audio_input_file_path: 保存先のファイルパス
+#     """
 
-    st.info("下のマイクボタンを押して話してください。録音後、自動で保存されます。")
+#     st.info("下のマイクボタンを押して話してください。録音後、自動で保存されます。")
 
     # # Streamlit標準の音声入力コンポーネント
     # audio_bytes = st.audio_input("🎙️ 音声を録音してください")
 
-    # 録音された場合のみ保存
-    if audio_bytes:
-        # ✅ UploadedFile なので read() で bytes データを取得する
-        audio_data = audio_bytes.read()
+    # # 録音された場合のみ保存
+    # if audio_bytes:
+    #     # ✅ UploadedFile なので read() で bytes データを取得する
+    #     audio_data = audio_bytes.read()
 
-        # ファイルにバイナリで書き込む
-        with open(audio_input_file_path, "wb") as f:
-            f.write(audio_data)
+    #     # ファイルにバイナリで書き込む
+    #     with open(audio_input_file_path, "wb") as f:
+    #         f.write(audio_data)
 
-        st.success("✅ 音声が保存されました！")
-    else:
-        st.stop()
+    #     st.success("✅ 音声が保存されました！")
+    # else:
+    #     st.stop()
 
 
 
