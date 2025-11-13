@@ -210,49 +210,63 @@ if st.session_state.start_flg:
             st.rerun()
 
 
-    # モード：「日常英会話」
-    if st.session_state.mode == ct.MODE_1:
+# ======= モード：「日常英会話」（美しいUI完成版） =======
+if st.session_state.mode == ct.MODE_1:
 
-        st.info("🎙️ マイクボタンを押して話してください。録音後、自動でAIが返答します。")
+    st.info("🎙️ 下のマイクボタンを押して話してください。録音後、自動でAIが返答します。")
+    st.write("――――――――――")
 
-        audio = st.audio_input("あなたの声を録音してください")
+    # -------------------------
+    # 📌 1. 録音 UI（画面下部固定）
+    # -------------------------
+    audio = st.audio_input("あなたの声を録音してください")
 
-        # ===== 録音完了した瞬間だけ処理 =====
-        if audio is not None and "processing" not in st.session_state:
-            st.session_state.processing = True
+    # -------------------------
+    # 📌 2. 録音が完了した瞬間のみ処理
+    # -------------------------
+    if audio is not None and "processing" not in st.session_state:
+        st.session_state.processing = True
 
-            # ---- ① 音声ファイルとして保存 ----
-            audio_path = f"{ct.AUDIO_INPUT_DIR}/rec_{int(time.time())}.wav"
-            with open(audio_path, "wb") as f:
-                f.write(audio.getvalue())
+        # --- 保存先 ---
+        audio_path = f"{ct.AUDIO_INPUT_DIR}/rec_{int(time.time())}.wav"
 
-            # ---- ② Whisper ----
-            with st.spinner("音声を文字起こし中..."):
-                transcript = ft.transcribe_audio(audio_path)
-                user_text = transcript.text
+        with open(audio_path, "wb") as f:
+            f.write(audio.getvalue())
 
-            # ---- ③ 履歴に追加（ユーザー発話） ----
-            st.session_state.messages.append({
-                "role": "user",
-                "content": user_text
-            })
+        # -------------------------
+        # 📌 3. Whisper（文字起こし）
+        # -------------------------
+        with st.spinner("音声を文字起こし中..."):
+            transcript = ft.transcribe_audio(audio_path)
+            user_text = transcript.text
 
-            # ---- ④ AI応答（テキスト＋音声） ----
-            with st.spinner("AIが返答を生成中..."):
-                ai_text, audio_bytes = ft.generate_ai_response(user_text)
+        # 🔹 チャット欄へ表示
+        st.session_state.messages.append({
+            "role": "user",
+            "content": user_text
+        })
 
-            # ---- ⑤ 履歴に追加（音声も保存） ----
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": ai_text,
-                "audio": audio_bytes
-            })
+        # -------------------------
+        # 📌 4. AI応答（テキスト + 音声）
+        # -------------------------
+        with st.spinner("AIが返答を生成中..."):
+            ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
-            # ---- ⑥ 再描画 ----
-            st.rerun()
+        # 🔹 履歴に保存（音声も記録）
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": ai_text,
+            "audio": audio_bytes
+        })
 
-        else:
-            st.session_state.pop("processing", None)
+        # -------------------------
+        # 📌 5. 再描画 → メッセージ表示 → 録音 UI が最下部へ
+        # -------------------------
+        st.rerun()
+
+    else:
+        # 処理フラグをリセット
+        st.session_state.pop("processing", None)
 
 
 
