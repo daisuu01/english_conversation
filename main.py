@@ -200,8 +200,11 @@ if st.session_state.start_flg:
         # マイク録音
         audio = st.audio_input("あなたの声を録音してください")
 
-        # 録音が終わった瞬間に `audio` が None → bytes に変わる
-        if audio is not None:
+        # ======= 録音が完了した瞬間だけ処理 =======
+        if audio is not None and "processing" not in st.session_state:
+
+            # 🔒 処理の二重実行を防ぐフラグ
+            st.session_state.processing = True
 
             # ---- ① 音声ファイルとして保存 ----
             audio_path = f"{ct.AUDIO_INPUT_DIR}/rec_{int(time.time())}.wav"
@@ -213,7 +216,7 @@ if st.session_state.start_flg:
                 transcript = ft.transcribe_audio(audio_path)
                 user_text = transcript.text
 
-            # ---- ③ ユーザーの発話を表示 ----
+            # ---- ③ ユーザー発話を表示 ----
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
 
@@ -223,16 +226,19 @@ if st.session_state.start_flg:
 
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
-
-            # 🔊 音声を即再生
-            st.audio(audio_bytes, format="audio/mp3")
+                st.audio(audio_bytes, format="audio/mp3")
 
             # ---- ⑤ 履歴追加 ----
             st.session_state.messages.append({"role": "user", "content": user_text})
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
-            # ---- ⑥ ページ再描画（またマイクボタンが表示される）----
+            # ---- ⑥ 即再描画（新しい録音待ち）----
             st.rerun()
+
+        # ======= 再描画後：録音待ちに戻る =======
+        else:
+            st.session_state.pop("processing", None)
+
 
 
 
