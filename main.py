@@ -109,16 +109,34 @@ with st.chat_message("assistant", avatar="images/ai_icon.jpg"):
     """)
 st.divider()
 
-# メッセージリストの一覧表示
-for message in st.session_state.messages:
-    if message["role"] == "assistant":
-        with st.chat_message(message["role"], avatar="images/ai_icon.jpg"):
-            st.markdown(message["content"])
-    elif message["role"] == "user":
-        with st.chat_message(message["role"], avatar="images/user_icon.jpg"):
-            st.markdown(message["content"])
-    else:
-        st.divider()
+
+# ===== メッセージリストの描画 =====
+for msg in st.session_state.messages:
+
+    # --- AIメッセージ ---
+    if msg["role"] == "assistant":
+        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+            st.markdown(msg["content"])
+
+            # 🔊 音声ファイルがある場合だけ再生UIを表示
+            if "audio" in msg:
+                st.audio(msg["audio"], format="audio/mp3")
+
+    # --- ユーザーメッセージ ---
+    elif msg["role"] == "user":
+        with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+            st.markdown(msg["content"])
+
+# # メッセージリストの一覧表示
+# for message in st.session_state.messages:
+#     if message["role"] == "assistant":
+#         with st.chat_message(message["role"], avatar="images/ai_icon.jpg"):
+#             st.markdown(message["content"])
+#     elif message["role"] == "user":
+#         with st.chat_message(message["role"], avatar="images/user_icon.jpg"):
+#             st.markdown(message["content"])
+#     else:
+#         st.divider()
 
 # LLMレスポンスの下部にモード実行のボタン表示
 if st.session_state.shadowing_flg:
@@ -197,13 +215,10 @@ if st.session_state.start_flg:
 
         st.info("🎙️ マイクボタンを押して話してください。録音後、自動でAIが返答します。")
 
-        # マイク録音
         audio = st.audio_input("あなたの声を録音してください")
 
-        # ======= 録音が完了した瞬間だけ処理 =======
+        # ===== 録音完了した瞬間だけ処理 =====
         if audio is not None and "processing" not in st.session_state:
-
-            # 🔒 処理の二重実行を防ぐフラグ
             st.session_state.processing = True
 
             # ---- ① 音声ファイルとして保存 ----
@@ -211,34 +226,33 @@ if st.session_state.start_flg:
             with open(audio_path, "wb") as f:
                 f.write(audio.getvalue())
 
-            # ---- ② Whisper 文字起こし ----
+            # ---- ② Whisper ----
             with st.spinner("音声を文字起こし中..."):
                 transcript = ft.transcribe_audio(audio_path)
                 user_text = transcript.text
 
-            # ---- ③ ユーザー発話を表示 ----
-            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-                st.markdown(user_text)
+            # ---- ③ 履歴に追加（ユーザー発話） ----
+            st.session_state.messages.append({
+                "role": "user",
+                "content": user_text
+            })
 
-            # ---- ④ AI応答（テキスト＋音声）----
+            # ---- ④ AI応答（テキスト＋音声） ----
             with st.spinner("AIが返答を生成中..."):
                 ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
-            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-                st.markdown(ai_text)
-                st.audio(audio_bytes, format="audio/mp3")
+            # ---- ⑤ 履歴に追加（音声も保存） ----
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": ai_text,
+                "audio": audio_bytes
+            })
 
-            # ---- ⑤ 履歴追加 ----
-            st.session_state.messages.append({"role": "user", "content": user_text})
-            st.session_state.messages.append({"role": "assistant", "content": ai_text})
-
-            # ---- ⑥ 即再描画（新しい録音待ち）----
+            # ---- ⑥ 再描画 ----
             st.rerun()
 
-        # ======= 再描画後：録音待ちに戻る =======
         else:
             st.session_state.pop("processing", None)
-
 
 
 
