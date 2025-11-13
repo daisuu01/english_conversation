@@ -195,66 +195,45 @@ if st.session_state.start_flg:
     # モード：「日常英会話」
     if st.session_state.mode == ct.MODE_1:
 
-        # ===== ステップ1：最初のターン =====
-        if "conv_ready" not in st.session_state:
-            st.session_state.conv_ready = False
+        st.info("🎙️ マイクボタンを押して話してください。録音後、自動でAIが返答します。")
 
-        if not st.session_state.conv_ready:
-            st.info("🎤 スタートを押して話し始めてください。録音UIが表示されます。")
-            if st.button("▶️ スタート"):
-                st.session_state.conv_ready = True
-                st.rerun()
-            st.stop()
+        # マイク録音
+        audio = st.audio_input("あなたの声を録音してください")
 
-        # ===== ステップ2：録音UI =====
-        st.write("🎙️ 録音してください。録音が終わったら STOP を押してください。")
-        audio = st.audio_input("あなたの話した音声")
+        # 録音が終わった瞬間に `audio` が None → bytes に変わる
+        if audio is not None:
 
-        # ===== ステップ3：STOPで確定 =====
-        if st.button("⏹ STOP（録音確定）"):
-
-            if audio is None:
-                st.error("音声が録音されていません。")
-                st.stop()
-
-            # 音声ファイル保存
+            # ---- ① 音声ファイルとして保存 ----
             audio_path = f"{ct.AUDIO_INPUT_DIR}/rec_{int(time.time())}.wav"
             with open(audio_path, "wb") as f:
                 f.write(audio.getvalue())
 
-            # Whisper → テキスト化
+            # ---- ② Whisper 文字起こし ----
             with st.spinner("音声を文字起こし中..."):
                 transcript = ft.transcribe_audio(audio_path)
                 user_text = transcript.text
 
+            # ---- ③ ユーザーの発話を表示 ----
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
 
-            # AI応答生成
-            with st.spinner("返答を生成中..."):
+            # ---- ④ AI応答（テキスト＋音声）----
+            with st.spinner("AIが返答を生成中..."):
                 ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
-            # ---- ここが重要ポイント ----
-            # 🔹 AIのテキストだけ chat_message 内で表示
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
 
-            # 🔹 音声は chat_message の外で再生（これで確実に再生される）
+            # 🔊 音声を即再生
             st.audio(audio_bytes, format="audio/mp3")
-            # --------------------------------
 
-            # 履歴追加
+            # ---- ⑤ 履歴追加 ----
             st.session_state.messages.append({"role": "user", "content": user_text})
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
-            # ボタンを復活させるために conv_ready をリセット
-            st.session_state.conv_ready = False
+            # ---- ⑥ ページ再描画（またマイクボタンが表示される）----
+            st.rerun()
 
-            # 🔸 ここでは rerun しない（音声が消えてしまう）
-            st.stop()
-
-        # 録音UI表示中はここで止める
-        st.stop()
 
 
 
