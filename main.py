@@ -210,68 +210,80 @@ if st.session_state.start_flg:
             st.rerun()
 
 
-# ======= モード：「日常英会話」（美しいUI完成版） =======
+# ====================================
+# 日常英会話モード（完成版・美しいUI）
+# ====================================
+
+import time
+
+def typewriter(text, delay=0.01):
+    """テキストを1文字ずつ表示"""
+    placeholder = st.empty()
+    displayed = ""
+    for char in text:
+        displayed += char
+        placeholder.markdown(displayed)
+        time.sleep(delay)
+    return placeholder
+
+
 if st.session_state.mode == ct.MODE_1:
 
-    st.info("🎙️ 下のマイクボタンを押して話してください。録音後、自動でAIが返答します。")
-    st.write("――――――――――")
+    st.info("🎤 マイクボタンで録音 → 停止ボタン → AIが返答します。")
+    st.write("---")
 
-    # -------------------------
-    # 📌 1. 録音 UI（画面下部固定）
-    # -------------------------
+    # ===== 1. 音声録音（マイクボタン表示） =====
     audio = st.audio_input("あなたの声を録音してください")
 
-    # -------------------------
-    # 📌 2. 録音が完了した瞬間のみ処理
-    # -------------------------
-    if audio is not None and "processing" not in st.session_state:
+    # 停止ボタン（押すまで何も起こらない）
+    stop = st.button("⏹ 停止（録音確定）")
+
+    # --------------------------------------------
+    # 2. 停止ボタンを押して録音がある場合のみ処理
+    # --------------------------------------------
+    if stop and audio is not None and "processing" not in st.session_state:
+
         st.session_state.processing = True
 
-        # --- 保存先 ---
+        # ---- ① 音声保存 ----
         audio_path = f"{ct.AUDIO_INPUT_DIR}/rec_{int(time.time())}.wav"
-
         with open(audio_path, "wb") as f:
             f.write(audio.getvalue())
 
-        # -------------------------
-        # 📌 3. Whisper（文字起こし）
-        # -------------------------
+        # ---- ② Whisper ----
         with st.spinner("音声を文字起こし中..."):
             transcript = ft.transcribe_audio(audio_path)
             user_text = transcript.text
 
-        # 🔹 チャット欄へ表示
-        st.session_state.messages.append({
-            "role": "user",
-            "content": user_text
-        })
+        # ==== ③ ユーザー発話（タイプライター表示）====
+        with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+            typewriter(user_text, delay=0.005)
 
-        # -------------------------
-        # 📌 4. AI応答（テキスト + 音声）
-        # -------------------------
+        st.session_state.messages.append({"role": "user", "content": user_text})
+
+        # ---- ④ AI応答作成 ----
         with st.spinner("AIが返答を生成中..."):
             ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
-        # 🔹 履歴に保存（音声も記録）
+        # ==== ⑤ AIの返答（タイプライター表示）====
+        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+            typewriter(ai_text, delay=0.005)
+
+            # ==== ⑥ 音声再生ボタン ====
+            st.audio(audio_bytes, format="audio/mp3")
+
         st.session_state.messages.append({
             "role": "assistant",
             "content": ai_text,
             "audio": audio_bytes
         })
 
-        # -------------------------
-        # 📌 5. 再描画 → メッセージ表示 → 録音 UI が最下部へ
-        # -------------------------
+        # ---- ⑦ 再描画して録音 UI を最下部に戻す & 録音データクリア ----
         st.rerun()
 
+    # 録音データをクリアしてループが続く
     else:
-        # 処理フラグをリセット
         st.session_state.pop("processing", None)
-
-
-
-
-
 
     # # モード：「日常英会話」
     # if st.session_state.mode == ct.MODE_1:
