@@ -192,53 +192,56 @@ if st.session_state.start_flg:
             st.rerun()
 
 
-    # ==============================================
-    # モード：「日常英会話」パターンA（ターン制・安定版）
-    # ==============================================
+    # ===============================
+    # モード：「日常英会話」
+    # ===============================
     if st.session_state.mode == ct.MODE_1:
 
-        st.markdown("### 🗣️ 日常英会話モード")
+        # 初回だけ「スタート」ボタンを表示
+        if "conv_listening" not in st.session_state:
+            st.session_state.conv_listening = False
 
-        # 初期化
-        if "recording" not in st.session_state:
-            st.session_state.recording = False
+        # 1️⃣ ユーザーが話す準備
+        if not st.session_state.conv_listening:
 
-        # -----------------------------
-        # 1. 録音していない → スタート表示
-        # -----------------------------
-        if not st.session_state.recording:
-            if st.button("🎙️ スタート（録音開始）", type="primary"):
-                st.session_state.recording = True
+            st.info("🎤 スタートを押して話し始めてください。話し終えたら STOP を押します。")
+
+            if st.button("▶️ スタート"):
+                st.session_state.conv_listening = True
                 st.rerun()
+
             st.stop()
 
-        # -----------------------------
-        # 2. 録音中 UI
-        # -----------------------------
-        st.info("🎤 録音中です。話し終わったらストップを押してください。")
 
-        audio_input_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
-        audio_data = st.audio_input("🎙️ 話してください")
+        # 2️⃣ 録音モード中
+        st.warning("🎙️ 録音中です。話し終えたら STOP を押してください。")
 
-        stop = st.button("⏹ ストップ（録音終了）", type="secondary")
+        audio_data = st.audio_input("あなたの発話を録音中（STOP を押してください）")
 
-        if not stop:
-            st.stop()
+        # STOP が押されると conv_listening = False にして確定
+        if st.button("⏹ STOP"):
+            st.session_state.conv_listening = False
 
-        # -----------------------------
-        # 3. ストップ後 → 保存してAI応答
-        # -----------------------------
-        if audio_data:
-            with open(audio_input_path, "wb") as f:
-                f.write(audio_data.read())
+            if audio_data is None:
+                st.error("音声が取得できませんでした。")
+                st.stop()
 
-            with st.spinner("音声 → テキスト変換中..."):
-                transcript = ft.transcribe_audio(audio_input_path)
+            # 保存
+            audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_{int(time.time())}.wav"
+            with open(audio_input_file_path, "wb") as f:
+                f.write(audio_data.getvalue())
+
+            st.success("音声を取得しました！")
+
+            # Whisper 文字起こし
+            with st.spinner("音声をテキストに変換中..."):
+                transcript = ft.transcribe_audio(audio_input_file_path)
                 user_text = transcript.text
 
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
 
+            # AI 応答
             with st.spinner("AIが返答を生成中..."):
                 ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
@@ -246,17 +249,13 @@ if st.session_state.start_flg:
                 st.markdown(ai_text)
                 st.audio(audio_bytes, format="audio/mp3")
 
+            # 会話履歴に追加
             st.session_state.messages.append({"role": "user", "content": user_text})
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
-        else:
-            st.warning("⚠️ 音声が取得できませんでした。もう一度お話しください。")
+            # 次のターンへ
+            st.rerun()
 
-        # -----------------------------
-        # 4. 自動でスタートに戻る
-        # -----------------------------
-        st.session_state.recording = False
-        st.rerun()
 
 
     # # モード：「日常英会話」
