@@ -234,5 +234,5 @@ def generate_ai_response(user_text: str):
         input=ai_text,
     )
 
-    audio_bytes = tts_res.content if hasattr(tts_res, "content") else tts_res.read()
+    audio_bytes = tts_res.read()
     return ai_text, audio_bytes
