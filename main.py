@@ -191,33 +191,100 @@ if st.session_state.start_flg:
 
             st.rerun()
 
-    
-    # モード：「日常英会話」
+
+    # ==============================================
+    # モード：「日常英会話」パターンA（ターン制・安定版）
+    # ==============================================
     if st.session_state.mode == ct.MODE_1:
-        # 音声入力を受け取って音声ファイルを作成
-        audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
-        ft.record_audio(audio_input_file_path)
 
-        # 音声入力ファイルから文字起こしテキストを取得
-        with st.spinner('音声入力をテキストに変換中...'):
-            transcript = ft.transcribe_audio(audio_input_file_path)
-            audio_input_text = transcript.text
+        st.markdown("### 🗣️ 日常英会話モード")
 
-        # 音声入力テキストの画面表示
-        with st.chat_message("user", avatar=ct.USER_ICON_PATH):
-            st.markdown(audio_input_text)
+        # 初期化
+        if "recording" not in st.session_state:
+            st.session_state.recording = False
 
-        with st.spinner("AIが返答を生成中..."):
-            ai_text, audio_bytes = ft.generate_ai_response(audio_input_text)
+        # -----------------------------
+        # 1. 録音していない → スタート表示
+        # -----------------------------
+        if not st.session_state.recording:
+            if st.button("🎙️ スタート（録音開始）", type="primary"):
+                st.session_state.recording = True
+                st.rerun()
+            st.stop()
 
-        with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
-            st.markdown(ai_text)
-            st.audio(audio_bytes, format="audio/mp3")
+        # -----------------------------
+        # 2. 録音中 UI
+        # -----------------------------
+        st.info("🎤 録音中です。話し終わったらストップを押してください。")
+
+        audio_input_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
+        audio_data = st.audio_input("🎙️ 話してください")
+
+        stop = st.button("⏹ ストップ（録音終了）", type="secondary")
+
+        if not stop:
+            st.stop()
+
+        # -----------------------------
+        # 3. ストップ後 → 保存してAI応答
+        # -----------------------------
+        if audio_data:
+            with open(audio_input_path, "wb") as f:
+                f.write(audio_data.read())
+
+            with st.spinner("音声 → テキスト変換中..."):
+                transcript = ft.transcribe_audio(audio_input_path)
+                user_text = transcript.text
+
+            with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+                st.markdown(user_text)
+
+            with st.spinner("AIが返答を生成中..."):
+                ai_text, audio_bytes = ft.generate_ai_response(user_text)
+
+            with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+                st.markdown(ai_text)
+                st.audio(audio_bytes, format="audio/mp3")
+
+            st.session_state.messages.append({"role": "user", "content": user_text})
+            st.session_state.messages.append({"role": "assistant", "content": ai_text})
+
+        else:
+            st.warning("⚠️ 音声が取得できませんでした。もう一度お話しください。")
+
+        # -----------------------------
+        # 4. 自動でスタートに戻る
+        # -----------------------------
+        st.session_state.recording = False
+        st.rerun()
 
 
-        # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
-        st.session_state.messages.append({"role": "user", "content": audio_input_text})
-        st.session_state.messages.append({"role": "assistant", "content": ai_text})
+    # # モード：「日常英会話」
+    # if st.session_state.mode == ct.MODE_1:
+    #     # 音声入力を受け取って音声ファイルを作成
+    #     audio_input_file_path = f"{ct.AUDIO_INPUT_DIR}/audio_input_{int(time.time())}.wav"
+    #     ft.record_audio(audio_input_file_path)
+
+    #     # 音声入力ファイルから文字起こしテキストを取得
+    #     with st.spinner('音声入力をテキストに変換中...'):
+    #         transcript = ft.transcribe_audio(audio_input_file_path)
+    #         audio_input_text = transcript.text
+
+    #     # 音声入力テキストの画面表示
+    #     with st.chat_message("user", avatar=ct.USER_ICON_PATH):
+    #         st.markdown(audio_input_text)
+
+    #     with st.spinner("AIが返答を生成中..."):
+    #         ai_text, audio_bytes = ft.generate_ai_response(audio_input_text)
+
+    #     with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
+    #         st.markdown(ai_text)
+    #         st.audio(audio_bytes, format="audio/mp3")
+
+
+    #     # ユーザー入力値とLLMからの回答をメッセージ一覧に追加
+    #     st.session_state.messages.append({"role": "user", "content": audio_input_text})
+    #     st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
 
     # モード：「シャドーイング」

@@ -25,8 +25,8 @@ def record_audio(audio_input_file_path):
 
     st.info("下のマイクボタンを押して話してください。録音後、自動で保存されます。")
 
-    # Streamlit標準の音声入力コンポーネント
-    audio_bytes = st.audio_input("🎙️ 音声を録音してください")
+    # # Streamlit標準の音声入力コンポーネント
+    # audio_bytes = st.audio_input("🎙️ 音声を録音してください")
 
     # 録音された場合のみ保存
     if audio_bytes:
@@ -41,20 +41,6 @@ def record_audio(audio_input_file_path):
     else:
         st.stop()
 
-
-
-def transcribe_audio(audio_input_file_path):
-    """
-    既存モード用：音声ファイルから文字起こし（その後ファイル削除）
-    """
-    with open(audio_input_file_path, "rb") as audio_input_file:
-        transcript = st.session_state.openai_obj.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_input_file,
-            language="en"
-        )
-    os.remove(audio_input_file_path)
-    return transcript
 
 
 
