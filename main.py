@@ -206,12 +206,11 @@ if st.session_state.start_flg:
                 st.rerun()
             st.stop()
 
-
-        # ===== ステップ2：録音UIを表示 =====
+        # ===== ステップ2：録音UI =====
         st.write("🎙️ 録音してください。録音が終わったら STOP を押してください。")
         audio = st.audio_input("あなたの話した音声")
 
-        # ===== ステップ3：STOPボタンで確定処理 =====
+        # ===== ステップ3：STOPで確定 =====
         if st.button("⏹ STOP（録音確定）"):
 
             if audio is None:
@@ -231,20 +230,32 @@ if st.session_state.start_flg:
             with st.chat_message("user", avatar=ct.USER_ICON_PATH):
                 st.markdown(user_text)
 
-            # AI応答
+            # AI応答生成
             with st.spinner("返答を生成中..."):
                 ai_text, audio_bytes = ft.generate_ai_response(user_text)
 
+            # ---- ここが重要ポイント ----
+            # 🔹 AIのテキストだけ chat_message 内で表示
             with st.chat_message("assistant", avatar=ct.AI_ICON_PATH):
                 st.markdown(ai_text)
-                st.audio(audio_bytes, format="audio/mp3")
+
+            # 🔹 音声は chat_message の外で再生（これで確実に再生される）
+            st.audio(audio_bytes, format="audio/mp3")
+            # --------------------------------
 
             # 履歴追加
             st.session_state.messages.append({"role": "user", "content": user_text})
             st.session_state.messages.append({"role": "assistant", "content": ai_text})
 
+            # ボタンを復活させるために conv_ready をリセット
             st.session_state.conv_ready = False
-            st.rerun()
+
+            # 🔸 ここでは rerun しない（音声が消えてしまう）
+            st.stop()
+
+        # 録音UI表示中はここで止める
+        st.stop()
+
 
 
 
